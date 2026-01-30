@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>anesewo Tool Box</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 20px; background: #f8f9fa; color: #333; line-height: 1.6; }
+        header { text-align: center; margin-bottom: 50px; }
+        h1 { color: #2c3e50; margin-bottom: 10px; }
+        .description { color: #666; font-size: 1.1em; }
+
+        /* ツールカードのグリッド */
+        .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-bottom: 50px; }
+        .tool-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-decoration: none; color: inherit; transition: 0.3s; border: 1px solid #eee; display: flex; flex-direction: column; justify-content: space-between; }
+        .tool-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-color: #007bff; }
+        .tool-card h3 { margin: 0 0 10px 0; color: #007bff; }
+        .tool-card p { font-size: 0.9em; color: #555; margin-bottom: 15px; flex-grow: 1; }
+        .btn { display: inline-block; padding: 8px 15px; background: #007bff; color: white; border-radius: 6px; font-weight: bold; text-align: center; font-size: 0.9em; }
+
+        /* ライセンス・クレジットセクション */
+        .info-section { background: #fff; padding: 30px; border-radius: 12px; border-left: 5px solid #6c757d; }
+        .info-section h2 { font-size: 1.4em; margin-top: 0; color: #2c3e50; }
+        .info-section h3 { font-size: 1.1em; margin-top: 20px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 5px; font-size: 0.95em; }
+        .footer-note { font-size: 0.85em; color: #777; margin-top: 20px; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>ツール一覧</h1>
+</header>
+
+<main>
+    <div class="tool-grid">
+        <a href="./Audio" class="tool-card">
+            <div>
+                <h3>位相反転</h3>
+                <p>音声ファイルの位相をサンプル精度で反転させます。打ち消し確認やWAV書き出しに。</p>
+            </div>
+            <span class="btn">ツールを開く</span>
+        </a>
+
+        <a href="./graph" class="tool-card">
+            <div>
+                <h3>グラフ作成</h3>
+                <p>数値を入力してインタラクティブなグラフを生成します。データの可視化に。</p>
+            </div>
+            <span class="btn">ツールを開く</span>
+        </a>
+
+        <a href="./svg_generator" class="tool-card">
+            <div>
+                <h3>文字からSVG</h3>
+                <p>文字とフォントを指定してSVGファイルを生成。デザイン素材の作成に便利です。</p>
+            </div>
+            <span class="btn">ツールを開く</span>
+        </a>
+
+        <a href="./Audio-converter" class="tool-card">
+            <div>
+                <h3>音声ファイル変換</h3>
+                <p>動画(MP4等)から音声を抽出したり、MP3/WAVへ形式を変換します。</p>
+            </div>
+            <span class="btn">ツールを開く</span>
+        </a>
+    </div>
+
+    <section class="info-section">
+        <h2>Credits</h2>
+        <ul>
+            <li><a href="https://stuk.github.io/jszip/" target="_blank">JSZip</a> (MIT)</li>
+            <li><a href="https://github.com/zhuker/lamejs" target="_blank">lamejs</a> (LGPL)</li>
+            <li><a href="https://opentype.js.org/" target="_blank">opentype.js</a> (MIT)</li>
+            <li><a href="https://plotly.com/javascript/" target="_blank">Plotly.js</a> (MIT)</li>
+            <li>Special thanks to Gemini (Google AI)</li>
+        </ul>
+
+        <h2>ライセンスについて</h2>
+        <p>本リポジトリに含まれるツールのライセンスは、以下の優先順位に従います。</p>
+        <ol>
+            <li><strong>個別規定がある場合</strong>: 各ツール内のコメントや説明にライセンス指定がある場合は、そちらを優先します。</li>
+            <li><strong>ライブラリの性質を引き継ぐ場合</strong>: 使用している主要ライブラリに 強力なコピーレフト性（LGPL, GPL, CC BY-SA 等） があり、その制約がツール自体に及ぶ場合は、該当するライブラリのライセンスが適用されます。</li>
+            <li><strong>上記以外</strong>: すべて <strong>MIT License</strong> が適用されます。</li>
+        </ol>
+        <p class="footer-note">
+            各ディレクトリのREADMEに詳細を記載しているので、ツール単体での確認はこちらを参照してください。<br>誰でも自由に利用・改変・配布が可能ですが、本ツールの使用によるいかなる損害についても、作者は一切の責任を負いません。
+        </p>
+        <li><a href="https://github.com/anesewo/tools" target="_blank">ツール一覧のリポジトリのURL</a</li>
+    </section>
+</main>
+
+</body>
+</html>

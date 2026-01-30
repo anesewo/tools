@@ -1,0 +1,192 @@
+// License: MIT
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>SVG Master Aligner</title>
+    <script src="https://cdn.jsdelivr.net/npm/opentype.js@latest/dist/opentype.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background: #f8f9fa; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
+        h3 { margin-top: 0; color: #007bff; border-left: 4px solid #007bff; padding-left: 10px; font-size: 1.1em; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
+        textarea { width: 100%; height: 100px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+        input[type="text"], input[type="number"], input[type="color"], select { 
+            width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px;
+        }
+        button { 
+            width: 100%; background: #007bff; color: white; border: none; padding: 18px; 
+            border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 10px;
+        }
+        button:hover { background: #0056b3; }
+        #status { margin-top: 20px; padding: 10px; border-radius: 5px; display: none; text-align: center; font-weight: bold; }
+        .desc { font-size: 0.8em; color: #666; margin-bottom: 10px; line-height: 1.4; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="text-align:center; margin-bottom:30px;">SVG一括生成（配置カスタマイズ版）</h2>
+
+    <div class="section">
+        <h3>1. ファイル準備</h3>
+        <label>フォントを選択 (.ttf / .otf)</label>
+        <input type="file" id="fontInput" accept=".ttf,.otf">
+        <br><br>
+        <label>地名を入力 (1行に1つ)</label>
+        <textarea id="textInput" placeholder="東京&#13;&#10;大阪..."></textarea>
+    </div>
+
+    <div class="section">
+        <h3>2. ファイル名設定</h3>
+        <div class="grid">
+            <div>
+                <label>接頭辞 (数字の前の文字)</label>
+                <input type="text" id="filePrefix" placeholder="例: map_">
+            </div>
+        </div>
+        <p class="desc">出力例: map_1.svg, map_2.svg ... (1から始まります)</p>
+    </div>
+
+    <div class="section">
+        <h3>3. レイアウト設定</h3>
+        <div class="grid">
+            <div>
+                <label>水平方向の配置</label>
+                <select id="alignMode">
+                    <option value="left">左揃え (画面の左端)</option>
+                    <option value="center">中央揃え (画面の真ん中)</option>
+                    <option value="right">右揃え (画面の右端)</option>
+                    <option value="center-start" selected>中央から開始 (画面中央に左揃え)</option>
+                </select>
+            </div>
+            <div>
+                <label>左右の余白 (px)</label>
+                <input type="number" id="paddingX" value="50">
+            </div>
+            <div>
+                <label>画面の幅 (px)</label>
+                <input type="number" id="canvasW" value="1920">
+            </div>
+            <div>
+                <label>画面の高さ (px)</label>
+                <input type="number" id="canvasH" value="1080">
+            </div>
+            <div>
+                <label>文字サイズ (px)</label>
+                <input type="number" id="fontSize" value="80">
+            </div>
+            <div>
+                <label>文字の色</label>
+                <input type="color" id="fontColor" value="#000000">
+            </div>
+        </div>
+        <p class="desc">※上下方向は常に中央に配置されます。</p>
+    </div>
+
+    <button id="generateBtn">フォルダを選択して保存を開始</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    async function readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+        const fontFile = document.getElementById('fontInput').files[0];
+        const textData = document.getElementById('textInput').value.trim();
+        const prefix = document.getElementById('filePrefix').value;
+        const fontSizeVal = parseInt(document.getElementById('fontSize').value);
+        const fontColorVal = document.getElementById('fontColor').value;
+        const canvasW = parseInt(document.getElementById('canvasW').value);
+        const canvasH = parseInt(document.getElementById('canvasH').value);
+        const alignMode = document.getElementById('alignMode').value;
+        const paddingX = parseInt(document.getElementById('paddingX').value);
+        const statusDiv = document.getElementById('status');
+
+        if (!fontFile || !textData) {
+            alert('フォントと地名を入力してください。');
+            return;
+        }
+
+        try {
+            const dirHandle = await window.showDirectoryPicker();
+            statusDiv.style.display = "block";
+            statusDiv.style.backgroundColor = "#eee";
+            statusDiv.innerText = "フォント解析中...";
+
+            const fontBuffer = await readFileAsArrayBuffer(fontFile);
+            const font = opentype.parse(fontBuffer);
+            const lines = textData.split('\n').map(s => s.trim()).filter(s => s !== "");
+            
+            for (let i = 0; i < lines.length; i++) {
+                const text = lines[i];
+                
+                // パスの計測
+                const tempPath = font.getPath(text, 0, 0, fontSizeVal);
+                const box = tempPath.getBoundingBox();
+                
+                // Y座標（垂直中央）の計算
+                const startY = (canvasH / 2) - ((box.y1 + box.y2) / 2);
+
+                // X座標（水平配置）の計算
+                let startX;
+                switch (alignMode) {
+                    case 'left':
+                        // 左端 + 余白
+                        startX = -box.x1 + paddingX;
+                        break;
+                    case 'center':
+                        // 画面中央に文字のセンターを合わせる
+                        startX = (canvasW / 2) - ((box.x1 + box.x2) / 2);
+                        break;
+                    case 'right':
+                        // 右端 - 余白
+                        startX = canvasW - box.x2 - paddingX;
+                        break;
+                    case 'center-start':
+                        // 画面中央から文字を開始
+                        startX = (canvasW / 2);
+                        break;
+                }
+
+                const finalPath = font.getPath(text, startX, startY, fontSizeVal);
+                finalPath.fill = fontColorVal;
+
+                const svgContent = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="${canvasW}" height="${canvasH}" viewBox="0 0 ${canvasW} ${canvasH}" xmlns="http://www.w3.org/2000/svg">
+    ${finalPath.toSVG(2)}
+</svg>`;
+
+                const fileName = `${prefix}${i + 1}.svg`;
+                const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(svgContent);
+                await writable.close();
+
+                statusDiv.innerText = `保存中: ${i + 1} / ${lines.length}`;
+            }
+
+            statusDiv.style.backgroundColor = "#d4edda";
+            statusDiv.innerText = "完了！すべてのファイルを保存しました。";
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                alert('エラー: ' + err.message);
+            }
+            statusDiv.style.display = "none";
+        }
+    });
+</script>
+
+</body>
+</html>

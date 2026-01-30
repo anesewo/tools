@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    // License: MIT
+    <meta charset="UTF-8">
+    <title>Audio Phase Inverter Pro (Sample Accurate)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        /* UIは以前のものを完全に維持 */
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f8f9fa; color: #333; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #2c3e50; }
+        .upload-area { border: 3px dashed #dee2e6; padding: 40px; text-align: center; margin-bottom: 20px; border-radius: 10px; cursor: pointer; transition: 0.3s; background: #fff; }
+        .upload-area:hover { border-color: #007bff; background: #f0f7ff; }
+        .controls { display: none; gap: 10px; margin-bottom: 20px; justify-content: center; background: #e9ecef; padding: 15px; border-radius: 8px; }
+        .file-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; background: #fff; margin-bottom: 5px; border-radius: 4px; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }
+        .btn-single { background: #6c757d; color: white; }
+        .btn-all { background: #17a2b8; color: white; }
+        .btn-zip { background: #28a745; color: white; }
+        button:hover { opacity: 0.8; }
+        #status { text-align: center; margin: 10px 0; font-weight: bold; color: #007bff; }
+        .progress-container { width: 100%; background: #eee; border-radius: 10px; height: 10px; margin-bottom: 20px; display: none; }
+        .progress-bar { width: 0%; height: 100%; background: #007bff; border-radius: 10px; transition: width 0.1s; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>位相反転オーディオツール</h2>
+    
+    <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        ここにオーディオファイルをドロップ<br>またはクリックして選択<br>（.WAV以外の場合正しく動作しない可能性大）
+        <input type="file" id="fileInput" multiple accept="audio/*" style="display:none">
+    </div>
+
+    <div id="status"></div>
+    <div class="progress-container" id="progressContainer">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="controls" id="bulkControls">
+        <button class="btn-all" onclick="downloadAllIndividually()">全ファイルを個別DL</button>
+        <button class="btn-zip" onclick="downloadAsZip()">ZIPで一括DL</button>
+    </div>
+
+    <div id="fileList"></div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const status = document.getElementById('status');
+    const fileList = document.getElementById('fileList');
+    const bulkControls = document.getElementById('bulkControls');
+    const progressBar = document.getElementById('progressBar');
+    const progressContainer = document.getElementById('progressContainer');
+
+    let processedFiles = [];
+
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#007bff'; });
+    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#dee2e6'; });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#dee2e6';
+        handleFiles(e.dataTransfer.files);
+    });
+
+    async function handleFiles(files) {
+        if (files.length === 0) return;
+
+        processedFiles = [];
+        fileList.innerHTML = '';
+        bulkControls.style.display = 'none';
+        progressContainer.style.display = 'block';
+        
+        // 処理精度を上げるためにオフライン・オーディオ・コンテキストを検討しましたが、
+        // 1サンプルのズレも許さないため、直接デコード後のBufferを操作します。
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            status.innerText = `解析・反転中 (${i + 1}/${files.length}): ${file.name}`;
+            updateProgress(((i) / files.length) * 100);
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                // この時点でブラウザが音源をサンプル配列に展開します。
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+                // --- 厳密な位相反転処理 ---
+                // 元の波形を y = -x するだけの最も正確な処理です。
+                for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+                    const channelData = audioBuffer.getChannelData(ch);
+                    for (let n = 0; n < channelData.length; n++) {
+                        // 0を軸に完全反転（-1.0 to 1.0 の範囲を維持）
+                        channelData[n] = channelData[n] * -1.0; 
+                    }
+                }
+
+                // 修正後のBufferをWAV形式にパッキング（サンプリングレート維持）
+                const wavBlob = audioBufferToWav(audioBuffer);
+                const newName = `inverted_${file.name.split('.')[0]}.wav`;
+                
+                processedFiles.push({ name: newName, blob: wavBlob });
+                addToFileList(newName, wavBlob);
+
+            } catch (err) {
+                console.error(err);
+                status.innerText = `エラー: ${file.name} は非対応形式か破損しています。`;
+            }
+        }
+
+        updateProgress(100);
+        status.innerText = "すべての処理がサンプル精度で完了しました！";
+        bulkControls.style.display = 'flex';
+    }
+
+    function updateProgress(percent) {
+        progressBar.style.width = percent + '%';
+    }
+
+    function addToFileList(name, blob) {
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        div.innerHTML = `<span>${name}</span>`;
+        const btn = document.createElement('button');
+        btn.className = 'btn-single';
+        btn.innerText = '保存';
+        btn.onclick = () => download(blob, name);
+        div.appendChild(btn);
+        fileList.appendChild(div);
+    }
+
+    function download(blob, name) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function downloadAllIndividually() {
+        processedFiles.forEach((f, i) => {
+            setTimeout(() => download(f.blob, f.name), i * 400);
+        });
+    }
+
+    async function downloadAsZip() {
+        status.innerText = "ZIP作成中...";
+        const zip = new JSZip();
+        processedFiles.forEach(f => zip.file(f.name, f.blob));
+        const content = await zip.generateAsync({ type: 'blob' });
+        download(content, "inverted_files.zip");
+        status.innerText = "ZIPダウンロード完了";
+    }
+
+    // --- 修正：高精度WAVエンコーダー ---
+    function audioBufferToWav(buffer) {
+        const nCh = buffer.numberOfChannels;
+        const sRate = buffer.sampleRate;
+        const length = buffer.length * nCh * 2 + 44;
+        const ab = new ArrayBuffer(length);
+        const v = new DataView(ab);
+        let p = 0;
+
+        const writeString = (s) => {
+            for (let i = 0; i < s.length; i++) v.setUint8(p + i, s.charCodeAt(i));
+            p += s.length;
+        };
+
+        const writeU32 = (d) => { v.setUint32(p, d, true); p += 4; };
+        const writeU16 = (d) => { v.setUint16(p, d, true); p += 2; };
+
+        // RIFF header
+        writeString('RIFF');
+        writeU32(length - 8);
+        writeString('WAVE');
+
+        // fmt chunk
+        writeString('fmt ');
+        writeU32(16); // length of fmt chunk
+        writeU16(1);  // format (PCM)
+        writeU16(nCh);
+        writeU32(sRate);
+        writeU32(sRate * nCh * 2); // byte rate
+        writeU16(nCh * 2);         // block align
+        writeU16(16);              // bits per sample
+
+        // data chunk
+        writeString('data');
+        writeU32(buffer.length * nCh * 2);
+
+        // サンプルデータを書き込み
+        const channels = [];
+        for (let i = 0; i < nCh; i++) channels.push(buffer.getChannelData(i));
+
+        for (let i = 0; i < buffer.length; i++) {
+            for (let ch = 0; ch < nCh; ch++) {
+                let s = Math.max(-1, Math.min(1, channels[ch][i]));
+                // 16bit PCMへ変換
+                v.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                p += 2;
+            }
+        }
+        return new Blob([ab], { type: 'audio/wav' });
+    }
+</script>
+</body>
+</html>
