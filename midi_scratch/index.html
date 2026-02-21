@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>MIDI 簡易楽譜変換 (補正完全排除・高精度版)</title>
+    <script src="https://unpkg.com/@tonejs/midi"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f4f4f9; color: #333; }
+        h1 { border-bottom: 2px solid #555; padding-bottom: 10px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        button { background: #d9534f; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #c9302c; }
+        button:disabled { background: #ccc; }
+        #outputArea { width: 100%; height: 400px; margin-top: 15px; font-family: monospace; white-space: pre; border: 1px solid #ddd; padding: 10px; background: #222; color: #f0f0f0; overflow-y: scroll; }
+        .info { font-size: 0.9em; color: #666; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>MIDI → 簡易楽譜変換</h1>
+    <div class="card">
+        <p>midiファイルからscratchで公開されているプロジェクトの形式に変換します<br>
+           例えば<a href="https://scratch.mit.edu/projects/1255760732/" target="_blank">scratchプロジェクト</a></p>
+        <input type="file" id="midiInput" accept=".mid,.midi">
+        <br>
+        <button id="convertBtn">変換開始</button>
+        <button id="downloadBtn" disabled style="background:#5bc0de;">txtを保存</button>
+    </div>
+
+    <div id="resultContainer" style="display:none; margin-top:20px;">
+        <strong>パート一覧:</strong> <span id="partNames"></span>
+        <div id="outputArea"></div>
+    </div>
+
+    <script>
+        const pitchMap = { 0: 'a', 1: 'w', 2: 's', 3: 'e', 4: 'd', 5: 'f', 6: 't', 7: 'g', 8: 'y', 9: 'h', 10: 'u', 11: 'j' };
+
+        // 数値をきれいな文字列表現にする関数
+        function formatValue(ticks, ppq) {
+            const val = ticks / ppq;
+            
+            // 補正や無理な吸着は一切行わず、
+            // 精度を上げるため小数第4位で四捨五入する
+            let rounded = Math.round(val * 10000) / 10000;
+
+            return rounded.toString();
+        }
+
+        document.getElementById('convertBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('midiInput');
+            if (fileInput.files.length === 0) {
+                alert("MIDIファイルを選択してください。");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const midi = new Midi(await file.arrayBuffer());
+            const ppq = midi.header.ppq;
+            
+            let allOutput = [];
+            let partNames = [];
+
+            midi.tracks.forEach(track => {
+                if (track.notes.length === 0) return;
+
+                // 和音を別パートに分解する処理
+                const voices = [];
+                // ノートを絶対時間順にソート
+                const sortedNotes = track.notes.sort((a, b) => a.ticks - b.ticks);
+
+                sortedNotes.forEach(note => {
+                    let assigned = false;
+                    for (let v of voices) {
+                        // 既存のボイスの末尾と比較
+                        const lastNote = v[v.length - 1];
+                        const lastEnd = lastNote.ticks + lastNote.durationTicks;
+                        
+                        // 重なっていなければ同じパートに追加
+                        if (note.ticks >= lastEnd) {
+                            v.push(note);
+                            assigned = true;
+                            break;
+                        }
+                    }
+                    if (!assigned) {
+                        voices.push([note]);
+                    }
+                });
+
+                // 各ボイス（パート）をテキスト化
+                voices.forEach(voice => {
+                    const partName = `piano${allOutput.length + 1}`;
+                    partNames.push(partName);
+                    
+                    let text = `${partName}\n`;
+                    let lastTick = 0;
+
+                    voice.forEach(note => {
+                        // 1. 待機時間 (休符) の計算・追加
+                        if (note.ticks > lastTick) {
+                            const restTicks = note.ticks - lastTick;
+                            const restStr = formatValue(restTicks, ppq);
+                            
+                            if (restStr !== "0" && restStr !== "0.00" && parseFloat(restStr) > 0) {
+                                text += ` \n${restStr}\n`;
+                            }
+                        }
+
+                        // 2. 音高の変換・追加
+                        const pc = note.midi % 12;
+                        const oct = Math.floor(note.midi / 12) - 5; // C4 = 0
+                        let symbol = pitchMap[pc];
+                        
+                        if (oct > 0) symbol += "1".repeat(oct);
+                        else if (oct < 0) symbol += "2".repeat(Math.abs(oct));
+
+                        text += `${symbol}\n`;
+
+                        // 3. 音長の計算・追加
+                        const durStr = formatValue(note.durationTicks, ppq);
+                        text += `${durStr}\n`;
+
+                        lastTick = note.ticks + note.durationTicks;
+                    });
+                    
+                    allOutput.push(text);
+                });
+            });
+
+            const resultText = allOutput.join("\n") + "\nlast";
+            
+            document.getElementById('outputArea').textContent = resultText;
+            document.getElementById('partNames').textContent = partNames.join(", ");
+            document.getElementById('resultContainer').style.display = 'block';
+            
+            // ダウンロードボタンの設定
+            const dlBtn = document.getElementById('downloadBtn');
+            dlBtn.disabled = false;
+            dlBtn.onclick = () => {
+                const blob = new Blob([resultText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'converted_score.txt';
+                a.click();
+            };
+        });
+    </script>
+</body>
+</html>
