@@ -1,12 +1,7 @@
 いろいろ作るためにAIに作らせたツールをページ化しました以上
 
 ## URLと説明
-| ツール名 | 実行ページ | ソース・説明 (README) |
-| :--- | :--- | :--- |
-| **位相反転** | [Page](https://anesewo.github.io/tools/Audio) | [README](https://github.com/anesewo/tools/tree/main/Audio) |
-| **グラフ作成** | [Page](https://anesewo.github.io/tools/graph) | [README](https://github.com/anesewo/tools/tree/main/graph) |
-| **文字とフォントからSVG** | [Page](https://anesewo.github.io/tools/svg_generator) | [README](https://github.com/anesewo/tools/tree/main/svg_generator) |
-| **音声ファイル変換** | [Page](https://anesewo.github.io/tools/Audio-converter) | [README](https://github.com/anesewo/tools/tree/main/Audio-converter) |
+追加するごとに書くのめんどくさかったので各自探してください
 
 ## Credits
 本ツールは以下のライブラリを使用しているものがあります。
@@ -26,4 +21,5 @@
 各ディレクトリのREADMEに詳細を記載しているので、ツール単体での確認はこちらを参照してください。  
 
 誰でも自由に利用・改変・配布が可能ですが、本ツールの使用によるいかなる損害についても、作者は一切の責任を負いません。
+
 
