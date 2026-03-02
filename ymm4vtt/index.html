@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YMM4 to WebVTT 変換ツール</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .upload-area {
+            border: 2px dashed #3498db;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            border-radius: 8px;
+            transition: background 0.3s;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            background-color: #ebf5fb;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            display: inline-block;
+            background: #3498db;
+            color: #fff;
+            padding: 10px 25px;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+            font-family: monospace;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+            display: none;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 0.8em;
+            color: #7f8c8d;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>YMM4 → WebVTT 変換</h1>
+    <p>ゆっくりMovieMaker4のプロジェクトファイル（.ymmp）を選択してください。セリフを抽出し、字幕ファイル（.vtt）を作成します。</p>
+
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p>ここにファイルをドラッグ＆ドロップ、またはクリックして選択</p>
+        <input type="file" id="fileInput" accept=".ymmp">
+    </div>
+
+    <div id="status"></div>
+    
+    <div style="text-align: center;">
+        <button id="downloadBtn" class="btn" style="display: none;">VTTファイルをダウンロード</button>
+    </div>
+
+    <textarea id="outputArea" readonly></textarea>
+
+    <div class="footer">
+        ※ 変換はブラウザ上で行われるため、ファイルが外部に送信されることはありません。
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const status = document.getElementById('status');
+    const outputArea = document.getElementById('outputArea');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    let generatedVtt = "";
+
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        status.innerText = "解析中...";
+        status.style.color = "blue";
+
+        reader.onload = function(e) {
+            try {
+                const json = JSON.parse(e.target.result);
+                processYmmp(json, file.name);
+            } catch (err) {
+                status.innerText = "エラー: 正しいYMM4プロジェクトファイルではありません。";
+                status.style.color = "red";
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    function processYmmp(data, fileName) {
+        // FPSの取得（デフォルト30）
+        let fps = 30;
+        if (data.Timelines && data.Timelines[0] && data.Timelines[0].VideoInfo) {
+            fps = data.Timelines[0].VideoInfo.FPS || 30;
+        }
+
+        let items = [];
+
+        // 全タイムラインからアイテムを抽出
+        if (data.Timelines) {
+            data.Timelines.forEach(timeline => {
+                if (timeline.Items) {
+                    timeline.Items.forEach(item => {
+                        // Serif（セリフ）を持つアイテムのみ抽出
+                        if (item.Serif !== undefined && item.Serif !== null && item.Serif !== "") {
+                            items.push({
+                                frame: item.Frame,
+                                length: item.Length,
+                                text: item.Serif
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        if (items.length === 0) {
+            status.innerText = "セリフアイテムが見つかりませんでした。";
+            status.style.color = "orange";
+            return;
+        }
+
+        // 開始フレーム順にソート
+        items.sort((a, b) => a.frame - b.frame);
+
+        // VTTの構築
+        let vttContent = "WEBVTT\n\n";
+
+        items.forEach(item => {
+            const startTime = formatTime(item.frame / fps);
+            const endTime = formatTime((item.frame + item.length) / fps);
+            vttContent += `${startTime} --> ${endTime}\n`;
+            vttContent += `${item.text}\n\n`;
+        });
+
+        generatedVtt = vttContent;
+        outputArea.value = vttContent;
+        outputArea.style.display = "block";
+        downloadBtn.style.display = "inline-block";
+        status.innerText = `変換完了: ${items.length}件のセリフを抽出しました。(FPS: ${fps})`;
+        status.style.color = "green";
+
+        // ダウンロード処理の紐付け
+        downloadBtn.onclick = () => {
+            const blob = new Blob([generatedVtt], { type: 'text/vtt' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName.replace('.ymmp', '.vtt');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        };
+    }
+
+    // 秒数を HH:MM:SS.mmm 形式に変換
+    function formatTime(totalSeconds) {
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = Math.floor(totalSeconds % 60);
+        const ms = Math.floor((totalSeconds % 1) * 1000);
+
+        const pad = (n, l) => n.toString().padStart(l, '0');
+
+        return `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)}.${pad(ms, 3)}`;
+    }
+</script>
+
+</body>
+</html>
